@@ -12,43 +12,30 @@ server.use(express.json())
 const mongoClient = new MongoClient(process.env.MONGO_URI);
 let db = mongoClient.db("uolDB");
 
-function validateUser(user) {
-    try {
-        const value = userSchema.validateAsync(user);
-        return false;
-    } catch (error) {
-        return error;
-    }
-}
+const userSchema = Joi.object({
+    name: Joi.string().trim().required(),
+    lastStatus: Joi.date().timestamp("javascript"),
+});
 
 server.post("/participants", async (req, res) => {
-    const userSchema = Joi.object({
-        name: Joi.string().trim().required(),
-        lastStatus: Joi.date().timestamp().required(),
-    });
     const newUser = {
         name: req.body.name,
         lastStatus: Date.now()
     };
-    const isValid = validateUser(newUser);
-    if(isValid !== false) {
-        res.send(error);
-        mongoClient.close();
-        return;
-    }
     try {
         await mongoClient.connect();
-        const isRegistered = await db.collection("users").findOne({ name: req.body.name});
+        await userSchema.validateAsync(newUser, { abortEarly: false });
+        const isRegistered = db.collection("users").findOne(req.body);
         if(isRegistered === null) {
             await db.collection("users").insertOne(newUser);
             res.sendStatus(201);
             mongoClient.close();
-        } else {
-            res.sendStatus(409);
-            mongoClient.close();
-        }      
+            return;
+        }
+        res.sendStatus(409);
     } catch (error) {
-        res.sendStatus(422);
+        res.status(422).send(error.details.map(detail => detail.message));
+    } finally {
         mongoClient.close();
     }
 });
