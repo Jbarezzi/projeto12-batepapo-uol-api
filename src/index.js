@@ -3,6 +3,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import { MongoClient } from "mongodb";
 import Joi from "joi";
+import dayjs from "dayjs";
 
 dotenv.config();
 const server = express();
@@ -17,6 +18,14 @@ const userSchema = Joi.object({
     lastStatus: Joi.date().timestamp("javascript"),
 });
 
+const messageSchema = Joi.object({
+    from: Joi.string().required(),
+    to: Joi.string().required(),
+    text: Joi.string().required(),
+    type: Joi.string().required(),
+    time: Joi.string().required(),
+})
+
 server.post("/participants", async (req, res) => {
     const newUser = {
         name: req.body.name,
@@ -25,9 +34,17 @@ server.post("/participants", async (req, res) => {
     try {
         await mongoClient.connect();
         await userSchema.validateAsync(newUser, { abortEarly: false });
-        const isRegistered = db.collection("users").findOne(req.body);
+        const isRegistered = await db.collection("users").findOne(req.body);
         if(isRegistered === null) {
+            const newUserMessage = {
+                from: newUser.name,
+                to: 'Todos',
+                text: 'entra na sala...',
+                type: 'status',
+                time: dayjs().format("HH:mm:ss"),
+            }
             await db.collection("users").insertOne(newUser);
+            await db.collection("messages").insertOne(newUserMessage)
             res.sendStatus(201);
             mongoClient.close();
             return;
