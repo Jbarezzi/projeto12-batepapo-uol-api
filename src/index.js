@@ -34,7 +34,7 @@ server.post("/participants", async (req, res) => {
     try {
         await mongoClient.connect();
         await userSchema.validateAsync(newUser, { abortEarly: false });
-        const isRegistered = await db.collection("users").findOne(req.body);
+        const isRegistered = await db.collection("users").findOne({ name: newUser.name });
         if(isRegistered === null) {
             const newUserMessage = {
                 from: newUser.name,
@@ -52,6 +52,19 @@ server.post("/participants", async (req, res) => {
         res.sendStatus(409);
     } catch (error) {
         res.status(422).send(error.details.map(detail => detail.message));
+    } finally {
+        mongoClient.close();
+    }
+});
+
+server.post("/status", async (req, res) => {
+    const user = req.headers.name;
+    try {
+        mongoClient.connect();
+        await db.collection("users").updateOne({ name: user }, { $set: { lastStatus: Date.now() }});
+        res.sendStatus(200);
+    } catch(error) {
+        res.sendStatus(409);
     } finally {
         mongoClient.close();
     }
