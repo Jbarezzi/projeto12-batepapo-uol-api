@@ -18,14 +18,6 @@ const userSchema = Joi.object({
     lastStatus: Joi.date().timestamp("javascript"),
 });
 
-const messageSchema = Joi.object({
-    from: Joi.string().required(),
-    to: Joi.string().required(),
-    text: Joi.string().required(),
-    type: Joi.string().required(),
-    time: Joi.string().required(),
-})
-
 server.post("/participants", async (req, res) => {
     const newUser = {
         name: req.body.name,
@@ -58,13 +50,39 @@ server.post("/participants", async (req, res) => {
 });
 
 server.post("/status", async (req, res) => {
-    const user = req.headers.name;
+    const user = req.headers.user;
     try {
-        mongoClient.connect();
+        await mongoClient.connect();
         await db.collection("users").updateOne({ name: user }, { $set: { lastStatus: Date.now() }});
         res.sendStatus(200);
     } catch(error) {
         res.sendStatus(409);
+    } finally {
+        mongoClient.close();
+    }
+});
+
+server.post("/messages", async (req, res) => {
+    const message = {
+        from: req.headers.user,
+        ...req.body,
+        time: dayjs().format("HH:mm:ss"),
+    };
+    try {
+        await mongoClient.connect();
+        const validationName = await db.collection("users").findOne({ name: message.from });
+        const messageSchema = Joi.object({
+            from: Joi.any().valid(validationName.name),
+            to: Joi.string().trim().required(),
+            text: Joi.string().trim().required(),
+            type: Joi.any().valid("message", "private_message"),
+            time: Joi.string().required(),
+        })
+        await messageSchema.validateAsync(message,  { abortEarly: false });
+        await db.collection("messages").insertOne(message);
+        res.send(201);
+    } catch(error) {
+        res.status(422).send(error.details.map(detail => detail.message));
     } finally {
         mongoClient.close();
     }
