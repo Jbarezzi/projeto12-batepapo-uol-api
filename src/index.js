@@ -49,6 +49,13 @@ server.post("/participants", async (req, res) => {
     }
 });
 
+server.get("/participants", async (_req, res) => {
+    await mongoClient.connect();
+    const usersOn = await db.collection("users").find().toArray();
+    res.send(usersOn);
+    mongoClient.close();
+});
+
 server.post("/status", async (req, res) => {
     const user = req.headers.user;
     try {
@@ -86,6 +93,10 @@ server.post("/messages", async (req, res) => {
     } finally {
         mongoClient.close();
     }
+});
+
+server.get("/messages", async (req, res) => {
+
 });
 
 
