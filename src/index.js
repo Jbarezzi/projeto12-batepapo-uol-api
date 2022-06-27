@@ -13,11 +13,6 @@ server.use(express.json())
 const mongoClient = new MongoClient(process.env.MONGO_URI);
 let db = mongoClient.db("uolDB");
 
-const userSchema = Joi.object({
-    name: Joi.string().trim().required(),
-    lastStatus: Joi.date().timestamp("javascript"),
-});
-
 server.post("/participants", async (req, res) => {
     const newUser = {
         name: req.body.name,
@@ -25,6 +20,10 @@ server.post("/participants", async (req, res) => {
     };
     try {
         await mongoClient.connect();
+        const userSchema = Joi.object({
+            name: Joi.string().trim().required(),
+            lastStatus: Joi.date().timestamp("javascript"),
+        });
         await userSchema.validateAsync(newUser, { abortEarly: false });
         const isRegistered = await db.collection("users").findOne({ name: newUser.name });
         if(isRegistered === null) {
@@ -87,7 +86,7 @@ server.post("/messages", async (req, res) => {
         })
         await messageSchema.validateAsync(message,  { abortEarly: false });
         await db.collection("messages").insertOne(message);
-        res.send(201);
+        res.sendStatus(201);
     } catch(error) {
         res.status(422).send(error.details.map(detail => detail.message));
     } finally {
@@ -96,8 +95,31 @@ server.post("/messages", async (req, res) => {
 });
 
 server.get("/messages", async (req, res) => {
-
+    const user = req.headers.user;
+    let { limit } = req.query;
+    limit = limit ? parseInt(limit) : 0;
+    await mongoClient.connect();
+    const messages = await db.collection("messages").find( { $or: [
+        { to: 'Todos' },
+        { type: 'message' },
+        { from: user },
+        { to: user },
+      ], }).limit(limit).toArray();
+    res.send(messages);
 });
+
+async function checkIfUserIsOnline() {
+    const logoutTime = Date.now() - 10000;
+    await mongoClient.connect();
+    const usersToDelete = await db.collection("users").find({ lastStatus: {$lt: logoutTime}}).toArray();
+    for(let user of usersToDelete) {
+        await db.collection("users").deleteOne({ name: user.name });
+        await db.collection("messages").insertOne({ from: user.name, to: 'Todos', text: 'sai da sala...', type: 'status', time: dayjs().format("HH:mm:ss") })
+    }
+    mongoClient.close();
+}
+
+setInterval(checkIfUserIsOnline, 15000);
 
 
 server.listen(process.env.PORT);
