@@ -104,7 +104,8 @@ server.get("/messages", async (req, res) => {
         { type: 'message' },
         { from: user },
         { to: user },
-      ], }).limit(limit).toArray();
+      ], }).sort({ time: -1 }).limit(limit).toArray();
+      messages.reverse();
     res.send(messages);
 });
 
